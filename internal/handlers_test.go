@@ -12,7 +12,11 @@ import (
 )
 
 func setupTestServer() (*httptest.Server, *TaskManager) {
-	mgr := NewManager(5, 2, []string{".txt"})
+	return setupTestServerLimits(5, 2)
+}
+
+func setupTestServerLimits(maxTasks, maxFiles int) (*httptest.Server, *TaskManager) {
+	mgr := NewManager(maxTasks, maxFiles, []string{".txt"})
 	api := &API{Manager: mgr}
 	r := chi.NewRouter()
 	r.Post("/tasks", api.CreateTask)
@@ -124,4 +128,46 @@ func TestAddLinksAndStatus(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatal("task did not complete")
+}
+
+func TestCreateTaskServerBusy(t *testing.T) {
+	// delay server so processing lasts long enough
+	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.Write([]byte("ok"))
+	}))
+	defer fileSrv.Close()
+
+	ts, _ := setupTestServerLimits(1, 1)
+	defer ts.Close()
+
+	// create first task
+	resp, err := http.Post(ts.URL+"/tasks", "application/json", nil)
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	var out map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	id := out["task_id"]
+
+	// add link to start processing
+	body, _ := json.Marshal(map[string]string{"task_id": id, "url": fileSrv.URL + "/f.txt"})
+	resp, err = http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("add link: %v", err)
+	}
+	resp.Body.Close()
+
+	// attempt to create second task while first is in process
+	resp, err = http.Post(ts.URL+"/tasks", "application/json", nil)
+	if err != nil {
+		t.Fatalf("create second task: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", resp.StatusCode)
+	}
 }
