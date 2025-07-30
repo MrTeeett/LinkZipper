@@ -1,0 +1,145 @@
+package internal
+
+import (
+	"archive/zip"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type TaskStatus string
+
+const (
+    StatusPending  TaskStatus = "pending"
+    StatusComplete TaskStatus = "complete"
+)
+
+type Task struct {
+    ID          string
+    Urls        []string
+    Errors      map[string]string
+    ZipPath     string
+    Status      TaskStatus
+    createdAt   time.Time
+}
+
+// TaskManager хранит задачи в памяти
+type TaskManager struct {
+    mu        sync.Mutex
+    tasks     map[string]*Task
+    completed map[string]*Task
+    inProcess int
+    maxTasks  int
+    maxFiles  int
+    exts      map[string]struct{}
+}
+
+func NewManager(maxTasks, maxFiles int, allowedExts []string) *TaskManager {
+    exts := make(map[string]struct{}, len(allowedExts))
+    for _, e := range allowedExts {
+        exts[e] = struct{}{}
+    }
+    return &TaskManager{
+        tasks:    make(map[string]*Task),
+        completed: make(map[string]*Task),
+        maxTasks: maxTasks,
+        maxFiles: maxFiles,
+        exts:     exts,
+    }
+}
+
+func (m *TaskManager) Create() (string, error) {
+    m.mu.Lock()
+	defer m.mu.Unlock()
+	id := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	m.tasks[id] = &Task{ID: id, Urls: []string{}, Errors: make(map[string]string), Status: StatusPending, createdAt: time.Now()}
+	return id, nil
+}
+
+func (m *TaskManager) AddURL(id, url string) error {
+    m.mu.Lock()
+	task, ok := m.tasks[id]
+	if !ok {
+		m.mu.Unlock()
+		if _, done := m.completed[id]; done {
+			return errors.New("task already completed")
+		}
+		return errors.New("task not found")
+	}
+	if len(task.Urls) >= m.maxFiles {
+		m.mu.Unlock()
+		return errors.New("max files per task reached")
+	}
+	ext := filepath.Ext(url)
+	if _, allowed := m.exts[ext]; !allowed {
+		m.mu.Unlock()
+		return fmt.Errorf("extension %s not allowed", ext)
+	}
+	task.Urls = append(task.Urls, url)
+	shouldZip := len(task.Urls) == m.maxFiles
+	if shouldZip {
+		if m.inProcess >= m.maxTasks {
+			m.mu.Unlock()
+			return errors.New("server busy: max tasks reached")
+		}
+		m.inProcess++
+	}
+	m.mu.Unlock()
+
+    if shouldZip {
+		go m.process(task)
+	}
+	return nil
+}
+
+func (m *TaskManager) process(task *Task) {
+    tmpDir := os.TempDir()
+    zipName := fmt.Sprintf("%s.zip", task.ID)
+    zipPath := filepath.Join(tmpDir, zipName)
+    f, _ := os.Create(zipPath)
+    defer f.Close()
+    zw := zip.NewWriter(f)
+    defer zw.Close()
+
+    for _, url := range task.Urls {
+        resp, err := http.Get(url)
+        if err != nil {
+            task.Errors[url] = err.Error()
+            continue
+        }
+        defer resp.Body.Close()
+        if resp.StatusCode != http.StatusOK {
+            task.Errors[url] = fmt.Sprintf("status %d", resp.StatusCode)
+            continue
+        }
+        fname := filepath.Base(url)
+        w, _ := zw.Create(fname)
+        if _, err := io.Copy(w, resp.Body); err != nil {
+            task.Errors[url] = err.Error()
+        }
+    }
+    task.ZipPath = zipPath
+	task.Status = StatusComplete
+	m.mu.Lock()
+	m.inProcess--
+	delete(m.tasks, task.ID)
+	m.completed[task.ID] = task
+	m.mu.Unlock()
+}
+
+func (m *TaskManager) Status(id string) (*Task, error) {
+    m.mu.Lock()
+	defer m.mu.Unlock()
+	if task, ok := m.tasks[id]; ok {
+		return task, nil
+	}
+	if task, ok := m.completed[id]; ok {
+		return task, nil
+	}
+	return nil, errors.New("task not found")
+}

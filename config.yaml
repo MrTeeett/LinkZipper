@@ -1,0 +1,8 @@
+server:
+  port: 8080
+limits:
+  maxTasks: 3
+  maxFilesPerTask: 3
+  allowedExtensions:
+    - ".pdf"
+    - ".jpeg"
