@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -80,7 +81,12 @@ func (m *TaskManager) AddURL(id, url string) error {
 		m.mu.Unlock()
 		return errors.New("max files per task reached")
 	}
-	ext := filepath.Ext(url)
+	parsed, err := neturl.Parse(url)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		m.mu.Unlock()
+		return errors.New("invalid URL")
+	}
+	ext := filepath.Ext(parsed.Path)
 	if _, allowed := m.exts[ext]; !allowed {
 		m.mu.Unlock()
 		return fmt.Errorf("extension %s not allowed", ext)
