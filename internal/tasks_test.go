@@ -3,9 +3,38 @@ package internal
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestCreateUniqueIDs(t *testing.T) {
+	mgr := NewManager(1, 1, []string{".txt"})
+	const total = 100
+	idsCh := make(chan string, total)
+	var wg sync.WaitGroup
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			id, err := mgr.Create()
+			if err != nil {
+				t.Errorf("create task: %v", err)
+				return
+			}
+			idsCh <- id
+		}()
+	}
+	wg.Wait()
+	close(idsCh)
+	seen := make(map[string]struct{}, total)
+	for id := range idsCh {
+		if _, ok := seen[id]; ok {
+			t.Fatalf("duplicate id: %s", id)
+		}
+		seen[id] = struct{}{}
+	}
+}
 
 func TestAddURLWithQuery(t *testing.T) {
 	mgr := NewManager(1, 2, []string{".txt"})
@@ -57,6 +86,9 @@ func TestListAndDelete(t *testing.T) {
 	mgr := NewManager(2, 2, []string{".txt"})
 	id1, _ := mgr.Create()
 	id2, _ := mgr.Create()
+	if id1 == id2 {
+		t.Fatal("duplicate task ids")
+	}
 	tasks := mgr.List()
 	if len(tasks) != 2 {
 		t.Fatalf("expected 2 tasks, got %d", len(tasks))

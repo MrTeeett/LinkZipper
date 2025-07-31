@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -31,6 +32,8 @@ type Task struct {
 	Status      TaskStatus
 	createdAt   time.Time
 }
+
+var idCounter uint64
 
 // TaskManager хранит задачи в памяти
 type TaskManager struct {
@@ -67,7 +70,7 @@ func (m *TaskManager) Create() (string, error) {
 		return "", err
 	}
 
-	id := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	id := fmt.Sprintf("task-%d", atomic.AddUint64(&idCounter, 1))
 	m.tasks[id] = &Task{ID: id, Urls: []string{}, Errors: make(map[string]string), Status: StatusPending, createdAt: time.Now()}
 	Logger.WithField("task_id", id).Info("task created")
 	return id, nil

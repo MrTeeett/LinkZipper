@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -52,6 +53,43 @@ func TestCreateTask(t *testing.T) {
 	}
 	if _, err := mgr.Status(id); err != nil {
 		t.Fatalf("task not stored: %v", err)
+	}
+}
+
+func TestCreateTaskUniqueIDs(t *testing.T) {
+	ts, _ := setupTestServer()
+	defer ts.Close()
+
+	const total = 100
+	idsCh := make(chan string, total)
+	var wg sync.WaitGroup
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := http.Post(ts.URL+"/tasks", "application/json", nil)
+			if err != nil {
+				t.Errorf("create task: %v", err)
+				return
+			}
+			var out map[string]string
+			if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+				t.Errorf("decode: %v", err)
+				resp.Body.Close()
+				return
+			}
+			resp.Body.Close()
+			idsCh <- out["task_id"]
+		}()
+	}
+	wg.Wait()
+	close(idsCh)
+	seen := make(map[string]struct{}, total)
+	for id := range idsCh {
+		if _, ok := seen[id]; ok {
+			t.Fatalf("duplicate id: %s", id)
+		}
+		seen[id] = struct{}{}
 	}
 }
 
@@ -193,7 +231,9 @@ func TestListDeleteAndForceZip(t *testing.T) {
 	var out2 map[string]string
 	json.NewDecoder(resp.Body).Decode(&out2)
 	resp.Body.Close()
-
+	if out1["task_id"] == out2["task_id"] {
+		t.Fatal("duplicate task ids")
+	}
 	// list tasks
 	listResp, err := http.Get(ts.URL + "/tasks/list")
 	if err != nil {
