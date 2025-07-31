@@ -6,3 +6,6 @@ limits:
   allowedExtensions:
     - ".pdf"
     - ".jpeg"
+
+logging:
+  level: info

@@ -15,9 +15,15 @@ type LimitsConfig struct {
 	AllowedExts     []string `mapstructure:"allowedExtensions"`
 }
 
+type LoggingConfig struct {
+	Level string `mapstructure:"level"`
+	File  string `mapstructure:"file"`
+}
+
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	Limits LimitsConfig `mapstructure:"limits"`
+	Server  ServerConfig  `mapstructure:"server"`
+	Limits  LimitsConfig  `mapstructure:"limits"`
+	Logging LoggingConfig `mapstructure:"logging"`
 }
 
 func Load() *Config {

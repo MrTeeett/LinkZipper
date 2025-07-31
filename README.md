@@ -1,4 +1,4 @@
-# LinkZipper
+# Link Zipper
 
 Сервис для скачивания публичных файлов по URL и упаковки их в ZIP-архив.
 
@@ -8,9 +8,10 @@
 - Автоматическая сборка архива после добавления третьего файла
 - Ограничение на 3 одновременные задачи
 - Информирование об ошибках при недоступности ресурсов
+  
 ## Паттерны и практики
 
-* In-Memory TaskManager с __sync.Mutex__
+* In-Memory TaskManager с `sync.Mutex`
 
 ## Конфигурация
 
@@ -25,4 +26,8 @@ limits:
   allowedExtensions:
     - ".pdf"
     - ".jpeg"
+
+logging:
+  level: info
+  file: server.log
 ```

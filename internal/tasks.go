@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type TaskStatus string
@@ -59,11 +61,14 @@ func (m *TaskManager) Create() (string, error) {
 	defer m.mu.Unlock()
 
 	if m.inProcess >= m.maxTasks {
-		return "", errors.New("server busy: max tasks reached")
+		err := errors.New("server busy: max tasks reached")
+		Logger.WithError(err).Error("create task failed")
+		return "", err
 	}
 
 	id := fmt.Sprintf("task-%d", time.Now().UnixNano())
 	m.tasks[id] = &Task{ID: id, Urls: []string{}, Errors: make(map[string]string), Status: StatusPending, createdAt: time.Now()}
+	Logger.WithField("task_id", id).Info("task created")
 	return id, nil
 }
 
@@ -73,23 +78,33 @@ func (m *TaskManager) AddURL(id, url string) error {
 	if !ok {
 		m.mu.Unlock()
 		if _, done := m.completed[id]; done {
-			return errors.New("task already completed")
+			err := errors.New("task already completed")
+			Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+			return err
 		}
-		return errors.New("task not found")
+		err := errors.New("task not found")
+		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+		return err
 	}
 	if len(task.Urls) >= m.maxFiles {
 		m.mu.Unlock()
-		return errors.New("max files per task reached")
+		err := errors.New("max files per task reached")
+		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+		return err
 	}
 	parsed, err := neturl.Parse(url)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		m.mu.Unlock()
-		return errors.New("invalid URL")
+		err := errors.New("invalid URL")
+		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+		return err
 	}
 	ext := filepath.Ext(parsed.Path)
 	if _, allowed := m.exts[ext]; !allowed {
 		m.mu.Unlock()
-		return fmt.Errorf("extension %s not allowed", ext)
+		err := fmt.Errorf("extension %s not allowed", ext)
+		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+		return err
 	}
 	task.Urls = append(task.Urls, url)
 	shouldZip := len(task.Urls) == m.maxFiles
@@ -103,7 +118,10 @@ func (m *TaskManager) AddURL(id, url string) error {
 	m.mu.Unlock()
 
 	if shouldZip {
+		Logger.WithField("task_id", id).Info("processing started")
 		go m.process(task)
+	} else {
+		Logger.WithFields(logrus.Fields{"task_id": id, "url": url}).Info("url added")
 	}
 	return nil
 }
@@ -121,17 +139,22 @@ func (m *TaskManager) process(task *Task) {
 		resp, err := http.Get(url)
 		if err != nil {
 			task.Errors[url] = err.Error()
+			Logger.WithError(err).WithField("url", url).Error("download failed")
 			continue
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			task.Errors[url] = fmt.Sprintf("status %d", resp.StatusCode)
-			continue
+			Logger.WithField("url", url).Errorf("status %d", resp.StatusCode)
+			return
 		}
 		fname := filepath.Base(url)
 		w, _ := zw.Create(fname)
 		if _, err := io.Copy(w, resp.Body); err != nil {
 			task.Errors[url] = err.Error()
+			Logger.WithError(err).WithField("url", url).Error("write failed")
+		} else {
+			Logger.WithFields(logrus.Fields{"task_id": task.ID, "file": fname}).Info("file added")
 		}
 	}
 	task.ZipPath = zipPath
@@ -140,6 +163,7 @@ func (m *TaskManager) process(task *Task) {
 	m.inProcess--
 	delete(m.tasks, task.ID)
 	m.completed[task.ID] = task
+	Logger.WithField("task_id", task.ID).Info("task completed")
 	m.mu.Unlock()
 }
 

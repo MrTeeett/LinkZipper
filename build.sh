@@ -12,7 +12,7 @@ case "$1" in
 		if [ -d "$BUILD_DIR" ]; then
 	  		cmake --build "$BUILD_DIR" --target clean || true
 		fi
-		rm -rf "$BUILD_DIR" build CMakeFiles CMakeCache.txt Makefile cmake_install.cmake
+		rm -rf "$BUILD_DIR" build
 		;;
   	*)
 	echo "Usage: $0 {build|clean}"

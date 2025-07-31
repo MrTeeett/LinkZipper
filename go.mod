@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/go-chi/chi/v5 v5.2.2
+	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.20.1
 )
 
