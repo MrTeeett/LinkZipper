@@ -45,6 +45,7 @@ func (api *API) ListTasks(w http.ResponseWriter, r *http.Request) {
 			"id":     t.ID,
 			"status": t.Status,
 			"errors": t.Errors,
+			"urls":   t.Urls,
 		})
 	}
 	Logger.Info("tasks listed")
@@ -85,7 +86,7 @@ func (api *API) GetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	Logger.WithField("task_id", id).Info("status requested")
-	out := map[string]interface{}{"status": task.Status, "errors": task.Errors}
+	out := map[string]interface{}{"status": task.Status, "errors": task.Errors, "urls": task.Urls}
 	if task.Status == StatusComplete {
 		out["archive_url"] = "/download/" + id
 	}

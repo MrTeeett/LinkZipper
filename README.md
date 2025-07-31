@@ -39,8 +39,6 @@ Link Zipper
 
    ```
    POST /tasks
-   {}
-   => {"task_id": "task-..."}
    ```
 
 2. **Добавление ссылки**
@@ -48,7 +46,6 @@ Link Zipper
    ```
    POST /tasks/links
    {"task_id": "task-...", "url": "https://host/file.pdf"}
-   => {"status": "ok"}
    ```
 
 3. **Получение статуса**
@@ -73,7 +70,8 @@ Link Zipper
 6. **Преждевременная упаковка архива**
 
     ```
-    POST /tasks/zip` с телом `{ "task_id": "{task_id}" }
+    POST /tasks/zip`
+    {"task_id": "task-..."}
     ```
 
 7. **Удаление задачи**

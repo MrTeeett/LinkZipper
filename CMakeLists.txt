@@ -22,7 +22,17 @@ add_custom_target(build_api
 	VERBATIM
 )
 
+add_custom_target(build_gui
+	COMMAND ${CMAKE_COMMAND} -E echo "Building GUI for ${CMAKE_SYSTEM_NAME}..."
+	COMMAND go build
+			-o "${OUTPUT_BASE}/gui/Link Zipper Gui${EXE_SUFFIX}"
+			"${CMAKE_SOURCE_DIR}/cmd/gui/main.go"
+	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+	COMMENT ">>> build_gui"
+	VERBATIM
+)
+
 add_custom_target(build_all
-	DEPENDS build_api
+	DEPENDS build_api build_gui
 	COMMENT ">>> build_all: сборка API и GUI"
 )
