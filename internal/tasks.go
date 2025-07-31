@@ -116,6 +116,23 @@ func (m *TaskManager) AddURL(id, url string) error {
 		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
 		return err
 	}
+
+	normalized := *parsed
+	normalized.RawQuery = ""
+	normalized.Fragment = ""
+	normStr := normalized.String()
+	for _, u := range task.Urls {
+		exParsed, _ := neturl.Parse(u)
+		exParsed.RawQuery = ""
+		exParsed.Fragment = ""
+		if exParsed.String() == normStr {
+			m.mu.Unlock()
+			err := errors.New("this link already exists")
+			Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+			return err
+		}
+	}
+	
 	task.Urls = append(task.Urls, url)
 	shouldZip := len(task.Urls) == m.maxFiles
 	if shouldZip {
@@ -196,11 +213,11 @@ func (m *TaskManager) process(task *Task) {
 			Logger.WithError(err).WithField("url", url).Error("download failed")
 			continue
 		}
-		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			task.Errors[url] = fmt.Sprintf("status %d", resp.StatusCode)
 			Logger.WithField("url", url).Errorf("status %d", resp.StatusCode)
-			return
+			resp.Body.Close()
+			continue
 		}
 		fname := filepath.Base(url)
 		w, _ := zw.Create(fname)
@@ -210,6 +227,7 @@ func (m *TaskManager) process(task *Task) {
 		} else {
 			Logger.WithFields(logrus.Fields{"task_id": task.ID, "file": fname}).Info("file added")
 		}
+		resp.Body.Close()
 	}
 	task.ZipPath = zipPath
 	task.Status = StatusComplete
