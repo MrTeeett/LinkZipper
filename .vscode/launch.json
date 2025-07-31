@@ -6,7 +6,7 @@
 		"type": "go",
 		"request": "launch",
 		"mode": "auto",                
-		"program": "${workspaceFolder}/cmd/api",
+		"program": "${workspaceFolder}/cmd/api/main.go",
 		"env": {},                     
 		"args": [],                       
 		"buildFlags": "-tags=netgo",    

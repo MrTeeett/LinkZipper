@@ -20,7 +20,10 @@ func setupTestServerLimits(maxTasks, maxFiles int) (*httptest.Server, *TaskManag
 	api := &API{Manager: mgr}
 	r := chi.NewRouter()
 	r.Post("/tasks", api.CreateTask)
+	r.Get("/tasks/list", api.ListTasks)
 	r.Post("/tasks/links", api.AddLink)
+	r.Post("/tasks/zip", api.ForceZip)
+	r.Delete("/tasks/delete/*", api.DeleteTask)
 	r.Get("/tasks/status/*", api.GetStatus)
 	r.Get("/download/*", api.Download)
 	ts := httptest.NewServer(r)
@@ -169,5 +172,79 @@ func TestCreateTaskServerBusy(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", resp.StatusCode)
+	}
+}
+
+func TestListDeleteAndForceZip(t *testing.T) {
+	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer fileSrv.Close()
+
+	ts, _ := setupTestServer()
+	defer ts.Close()
+
+	// create two tasks
+	resp, _ := http.Post(ts.URL+"/tasks", "application/json", nil)
+	var out1 map[string]string
+	json.NewDecoder(resp.Body).Decode(&out1)
+	resp.Body.Close()
+	resp, _ = http.Post(ts.URL+"/tasks", "application/json", nil)
+	var out2 map[string]string
+	json.NewDecoder(resp.Body).Decode(&out2)
+	resp.Body.Close()
+
+	// list tasks
+	listResp, err := http.Get(ts.URL + "/tasks/list")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var list []map[string]interface{}
+	if err := json.NewDecoder(listResp.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	listResp.Body.Close()
+	if len(list) != 2 {
+		t.Fatalf("expected 2 tasks, got %d", len(list))
+	}
+
+	// add link to first task
+	body, _ := json.Marshal(map[string]string{"task_id": out1["task_id"], "url": fileSrv.URL + "/f.txt"})
+	http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
+
+	// force zip first task
+	body, _ = json.Marshal(map[string]string{"task_id": out1["task_id"]})
+	resp, err = http.Post(ts.URL+"/tasks/zip", "application/json", bytes.NewReader(body))
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("force zip request failed")
+	}
+	resp.Body.Close()
+
+	for i := 0; i < 40; i++ {
+		st, _ := http.Get(ts.URL + "/tasks/status/" + out1["task_id"])
+		var status map[string]interface{}
+		json.NewDecoder(st.Body).Decode(&status)
+		st.Body.Close()
+		if status["status"] == string(StatusComplete) {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	// delete second task
+	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/tasks/delete/"+out2["task_id"], nil)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete request failed")
+	}
+	resp.Body.Close()
+
+	// list again
+	listResp, _ = http.Get(ts.URL + "/tasks/list")
+	list = []map[string]interface{}{}
+	json.NewDecoder(listResp.Body).Decode(&list)
+	listResp.Body.Close()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 task after delete, got %d", len(list))
 	}
 }

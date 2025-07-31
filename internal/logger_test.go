@@ -16,7 +16,7 @@ func TestInitLoggerSetsLevel(t *testing.T) {
 		Logger.SetLevel(prevLevel)
 		Logger.SetOutput(prevOut)
 	}()
-
+	defer CloseLogger()
 	InitLogger("debug", "")
 	if Logger.GetLevel() != logrus.DebugLevel {
 		t.Fatalf("expected debug level, got %v", Logger.GetLevel())
@@ -30,7 +30,7 @@ func TestInitLoggerInvalidLevelDefaultsToInfo(t *testing.T) {
 		Logger.SetLevel(prevLevel)
 		Logger.SetOutput(prevOut)
 	}()
-
+	defer CloseLogger()
 	InitLogger("invalid", "")
 	if Logger.GetLevel() != logrus.InfoLevel {
 		t.Fatalf("expected info level, got %v", Logger.GetLevel())
@@ -44,7 +44,7 @@ func TestInitLoggerWithFile(t *testing.T) {
 		Logger.SetLevel(prevLevel)
 		Logger.SetOutput(prevOut)
 	}()
-
+	defer CloseLogger()
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "test.log")
 

@@ -32,8 +32,13 @@ func main() {
 	})
 	r.Post("/tasks", api.CreateTask)
 	r.Post("/tasks/links", api.AddLink)
+	r.Post("/tasks/zip", api.ForceZip)
+
 	r.Get("/tasks/status/*", api.GetStatus)
 	r.Get("/download/*", api.Download)
+	r.Get("/tasks/list", api.ListTasks)
+
+	r.Delete("/tasks/delete/*", api.DeleteTask)
 
 	r.Mount("/static/",
 		http.StripPrefix("/static/",

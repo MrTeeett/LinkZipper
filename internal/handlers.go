@@ -37,6 +37,45 @@ func (api *API) AddLink(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+func (api *API) ListTasks(w http.ResponseWriter, r *http.Request) {
+	tasks := api.Manager.List()
+	resp := make([]map[string]interface{}, 0, len(tasks))
+	for _, t := range tasks {
+		resp = append(resp, map[string]interface{}{
+			"id":     t.ID,
+			"status": t.Status,
+			"errors": t.Errors,
+		})
+	}
+	Logger.Info("tasks listed")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (api *API) ForceZip(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TaskID string `json:"task_id"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	if err := api.Manager.ForceZip(req.TaskID); err != nil {
+		Logger.WithError(err).WithField("task_id", req.TaskID).Error("force zip failed")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	Logger.WithField("task_id", req.TaskID).Info("force zip started")
+	json.NewEncoder(w).Encode(map[string]string{"status": "processing"})
+}
+
+func (api *API) DeleteTask(w http.ResponseWriter, r *http.Request) {
+	id := path.Base(r.URL.Path)
+	if err := api.Manager.Delete(id); err != nil {
+		Logger.WithError(err).WithField("task_id", id).Error("delete task failed")
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	Logger.WithField("task_id", id).Info("task deleted via API")
+	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
 func (api *API) GetStatus(w http.ResponseWriter, r *http.Request) {
 	id := path.Base(r.URL.Path)
 	task, err := api.Manager.Status(id)

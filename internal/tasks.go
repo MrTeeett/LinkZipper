@@ -19,6 +19,7 @@ type TaskStatus string
 
 const (
 	StatusPending  TaskStatus = "pending"
+	StatusProcessing TaskStatus = "processing"
 	StatusComplete TaskStatus = "complete"
 )
 
@@ -86,6 +87,12 @@ func (m *TaskManager) AddURL(id, url string) error {
 		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
 		return err
 	}
+	if task.Status != StatusPending {
+		m.mu.Unlock()
+		err := errors.New("task already processing")
+		Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+		return err
+	}
 	if len(task.Urls) >= m.maxFiles {
 		m.mu.Unlock()
 		err := errors.New("max files per task reached")
@@ -111,9 +118,12 @@ func (m *TaskManager) AddURL(id, url string) error {
 	if shouldZip {
 		if m.inProcess >= m.maxTasks {
 			m.mu.Unlock()
-			return errors.New("server busy: max tasks reached")
+			err := errors.New("server busy: max tasks reached")
+			Logger.WithError(err).WithField("task_id", id).Error("add url failed")
+			return err
 		}
 		m.inProcess++
+		task.Status = StatusProcessing
 	}
 	m.mu.Unlock()
 
@@ -123,6 +133,47 @@ func (m *TaskManager) AddURL(id, url string) error {
 	} else {
 		Logger.WithFields(logrus.Fields{"task_id": id, "url": url}).Info("url added")
 	}
+	return nil
+}
+
+func (m *TaskManager) ForceZip(id string) error {
+	m.mu.Lock()
+	task, ok := m.tasks[id]
+	if !ok {
+		m.mu.Unlock()
+		if _, done := m.completed[id]; done {
+			err := errors.New("task already completed")
+			Logger.WithError(err).WithField("task_id", id).Error("force zip failed")
+			return err
+		}
+		err := errors.New("task not found")
+		Logger.WithError(err).WithField("task_id", id).Error("force zip failed")
+		return err
+	}
+	if task.Status != StatusPending {
+		m.mu.Unlock()
+		err := errors.New("task already processing")
+		Logger.WithError(err).WithField("task_id", id).Error("force zip failed")
+		return err
+	}
+	if len(task.Urls) == 0 {
+		m.mu.Unlock()
+		err := errors.New("no files to archive")
+		Logger.WithError(err).WithField("task_id", id).Error("force zip failed")
+		return err
+	}
+	if m.inProcess >= m.maxTasks {
+		m.mu.Unlock()
+		err := errors.New("server busy: max tasks reached")
+		Logger.WithError(err).WithField("task_id", id).Error("force zip failed")
+		return err
+	}
+	m.inProcess++
+	task.Status = StatusProcessing
+	m.mu.Unlock()
+
+	Logger.WithField("task_id", id).Info("manual processing started")
+	go m.process(task)
 	return nil
 }
 
@@ -177,4 +228,48 @@ func (m *TaskManager) Status(id string) (*Task, error) {
 		return task, nil
 	}
 	return nil, errors.New("task not found")
+}
+
+func (m *TaskManager) List() []*Task {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]*Task, 0, len(m.tasks)+len(m.completed))
+	for _, t := range m.tasks {
+		out = append(out, t)
+	}
+	for _, t := range m.completed {
+		out = append(out, t)
+	}
+	return out
+}
+
+func (m *TaskManager) Delete(id string) error {
+	m.mu.Lock()
+	task, ok := m.tasks[id]
+	if ok {
+		if task.Status == StatusProcessing {
+			m.mu.Unlock()
+			err := errors.New("task in progress")
+			Logger.WithError(err).WithField("task_id", id).Error("delete task failed")
+			return err
+		}
+		delete(m.tasks, id)
+		Logger.WithField("task_id", id).Info("task deleted")
+		m.mu.Unlock()
+		return nil
+	}
+	task, ok = m.completed[id]
+	if ok {
+		delete(m.completed, id)
+		if task.ZipPath != "" {
+			os.Remove(task.ZipPath)
+		}
+		Logger.WithField("task_id", id).Info("task deleted")
+		m.mu.Unlock()
+		return nil
+	}
+	m.mu.Unlock()
+	err := errors.New("task not found")
+	Logger.WithError(err).WithField("task_id", id).Error("delete task failed")
+	return err
 }
