@@ -1,5 +1,7 @@
 server:
   port: 8080
+  key: ""
+  crt: ""
 limits:
   maxTasks: 3
   maxFilesPerTask: 3

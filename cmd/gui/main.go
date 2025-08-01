@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -26,9 +27,22 @@ type Task struct {
 func main() {
 	a := app.New()
 	w := a.NewWindow("LinkZipper GUI")
-	serverHost := a.Preferences().StringWithFallback("serverHost", "http://localhost")
+	serverHostPref := a.Preferences().StringWithFallback("serverHost", "localhost")
+	useHTTPS := a.Preferences().BoolWithFallback("useHTTPS", false)
+	serverHost := serverHostPref
+	if strings.HasPrefix(serverHostPref, "http://") {
+		serverHost = strings.TrimPrefix(serverHostPref, "http://")
+		useHTTPS = false
+	} else if strings.HasPrefix(serverHostPref, "https://") {
+		serverHost = strings.TrimPrefix(serverHostPref, "https://")
+		useHTTPS = true
+	}
 	serverPort := a.Preferences().StringWithFallback("serverPort", "8080")
-	serverURL := fmt.Sprintf("%s:%s", serverHost, serverPort)
+	scheme := "http"
+	if useHTTPS {
+		scheme = "https"
+	}
+	serverURL := fmt.Sprintf("%s://%s:%s", scheme, serverHost, serverPort)
 
 	var tasks []Task
 	selected := -1
@@ -288,18 +302,27 @@ func main() {
 		hostEntry.SetText(serverHost)
 		portEntry := widget.NewEntry()
 		portEntry.SetText(serverPort)
+		httpsCheck := widget.NewCheck("", nil)
+		httpsCheck.SetChecked(useHTTPS)
 		dialog.ShowForm("Server Settings", "Save", "Cancel", []*widget.FormItem{
-			widget.NewFormItem("URL", hostEntry),
+			widget.NewFormItem("Host", hostEntry),
 			widget.NewFormItem("Port", portEntry),
+			widget.NewFormItem("Use HTTPS", httpsCheck),
 		}, func(ok bool) {
 			if !ok {
 				return
 			}
 			serverHost = hostEntry.Text
 			serverPort = portEntry.Text
-			serverURL = fmt.Sprintf("%s:%s", serverHost, serverPort)
+			useHTTPS = httpsCheck.Checked
+			scheme := "http"
+			if useHTTPS {
+				scheme = "https"
+			}
+			serverURL = fmt.Sprintf("%s://%s:%s", scheme, serverHost, serverPort)
 			a.Preferences().SetString("serverHost", serverHost)
 			a.Preferences().SetString("serverPort", serverPort)
+			a.Preferences().SetBool("useHTTPS", useHTTPS)
 			refreshTasks()
 		}, w)
 	})

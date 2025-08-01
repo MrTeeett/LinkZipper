@@ -5,9 +5,10 @@
 			"label": "build",
 			"type": "shell",
 			"command": "./build.sh",
-			"args": ["build"],
+			"args": ["build_all"],
 			"windows": {
-				"command": ".\\build.bat"
+				"command": ".\\build.bat",
+				"args": ["build_all"]
 			},
 			"group": "build",
 			"problemMatcher": []

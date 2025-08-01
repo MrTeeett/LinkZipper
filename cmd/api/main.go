@@ -48,5 +48,9 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	internal.Logger.Infof("Starting server on %s", addr)
-	internal.Logger.Fatal(http.ListenAndServe(addr, r))
+	if cfg.Server.Crt != "" && cfg.Server.Key != "" {
+		internal.Logger.Fatal(http.ListenAndServeTLS(addr, cfg.Server.Crt, cfg.Server.Key, r))
+	} else {
+		internal.Logger.Fatal(http.ListenAndServe(addr, r))
+	}
 }

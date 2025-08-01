@@ -31,7 +31,8 @@
 Link Zipper
 ```
 
-Сервер стартует на порту, указанном в `config.yaml` (по умолчанию `8080`).
+Сервер стартует на порту, указанном в `config.yaml` (по умолчанию `8080`). При наличии `server.crt` и `server.key` запускается HTTPS.
+
 
 ### HTTP-эндпоинты
 
@@ -89,6 +90,8 @@ Link Zipper
 ```yaml
 server:
   port: 8080
+  key: server.key
+  crt: server.crt
 limits:
   maxTasks: 3
   maxFilesPerTask: 3

@@ -19,6 +19,7 @@ add_custom_target(build_api
 			"${CMAKE_SOURCE_DIR}/cmd/api/main.go"
 	WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 	COMMENT ">>> build_api"
+	COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/config.yaml ${OUTPUT_BASE}/api/
 	VERBATIM
 )
 

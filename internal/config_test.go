@@ -10,7 +10,7 @@ import (
 
 func TestLoad(t *testing.T) {
 	tmpDir := t.TempDir()
-	cfgContent := []byte("server:\n  port: 9090\nlimits:\n  maxTasks: 5\n  maxFilesPerTask: 3\n  allowedExtensions:\n    - \".txt\"\nlogging:\n  level: debug\n  file: app.log\n")
+	cfgContent := []byte("server:\n  port: 9090\n  key: server.key\n  crt: server.crt\nlimits:\n  maxTasks: 5\n  maxFilesPerTask: 3\n  allowedExtensions:\n    - \".txt\"\nlogging:\n  level: debug\n  file: app.log\n")
 	if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), cfgContent, 0644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
@@ -28,6 +28,9 @@ func TestLoad(t *testing.T) {
 
 	if cfg.Server.Port != 9090 {
 		t.Fatalf("expected port 9090, got %d", cfg.Server.Port)
+	}
+	if cfg.Server.Key != "server.key" || cfg.Server.Crt != "server.crt" {
+		t.Fatalf("unexpected server tls config: %+v", cfg.Server)
 	}
 	if cfg.Limits.MaxTasks != 5 || cfg.Limits.MaxFilesPerTask != 3 {
 		t.Fatalf("unexpected limits: %+v", cfg.Limits)

@@ -7,6 +7,8 @@ import (
 
 type ServerConfig struct {
 	Port int `mapstructure:"port"`
+	Key  string `mapstructure:"key"`
+	Crt  string `mapstructure:"crt"`
 }
 
 type LimitsConfig struct {
