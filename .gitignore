@@ -3,6 +3,7 @@
 #
 # Binaries for programs and plugins
 build
+cmake-build
 
 # Make file
 Makefile

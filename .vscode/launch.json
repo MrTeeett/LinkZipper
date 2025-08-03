@@ -5,11 +5,22 @@
 		"name": "Debug API",
 		"type": "go",
 		"request": "launch",
-		"mode": "auto",                
+		"mode": "auto",
 		"program": "${workspaceFolder}/cmd/api/main.go",
-		"env": {},                     
-		"args": [],                       
-		"buildFlags": "-tags=netgo",    
+		"env": {},
+		"args": [],
+		"buildFlags": "-tags=netgo",
+		"cwd": "${workspaceFolder}"
+		},
+		{
+		"name": "Debug GUI",
+		"type": "go",
+		"request": "launch",
+		"mode": "auto",
+		"program": "${workspaceFolder}/cmd/gui/main.go",
+		"env": {},
+		"args": [],
+		"buildFlags": "-tags=netgo",
 		"cwd": "${workspaceFolder}"
 		}
 	]

@@ -44,12 +44,14 @@ func TestInitLoggerWithFile(t *testing.T) {
 		Logger.SetLevel(prevLevel)
 		Logger.SetOutput(prevOut)
 	}()
-	defer CloseLogger()
+
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "test.log")
 
 	InitLogger("info", filePath)
 	Logger.Info("hello world")
+
+	t.Cleanup(CloseLogger)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {

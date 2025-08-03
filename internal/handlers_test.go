@@ -94,7 +94,6 @@ func TestCreateTaskUniqueIDs(t *testing.T) {
 }
 
 func TestAddLinksAndStatus(t *testing.T) {
-	// file server returning simple txt
 	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok"))
 	}))
@@ -103,7 +102,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 	ts, _ := setupTestServer()
 	defer ts.Close()
 
-	// create task
 	resp, err := http.Post(ts.URL+"/tasks", "application/json", nil)
 	if err != nil {
 		t.Fatalf("create task: %v", err)
@@ -115,7 +113,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 	}
 	id := out["task_id"]
 
-	// add first link
 	body, _ := json.Marshal(map[string]string{"task_id": id, "url": fileSrv.URL + "/f1.txt"})
 	resp, err = http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -125,7 +122,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	// status should be pending
 	stResp, err := http.Get(ts.URL + "/tasks/status/" + id)
 	if err != nil {
 		t.Fatalf("status request: %v", err)
@@ -139,7 +135,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 	}
 	stResp.Body.Close()
 
-	// add second link to trigger processing
 	body, _ = json.Marshal(map[string]string{"task_id": id, "url": fileSrv.URL + "/f2.txt"})
 	resp, err = http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -149,7 +144,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
 
-	// wait for completion
 	for i := 0; i < 40; i++ {
 		stResp, err = http.Get(ts.URL + "/tasks/status/" + id)
 		if err != nil {
@@ -172,7 +166,6 @@ func TestAddLinksAndStatus(t *testing.T) {
 }
 
 func TestCreateTaskServerBusy(t *testing.T) {
-	// delay server so processing lasts long enough
 	fileSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.Write([]byte("ok"))
@@ -182,7 +175,6 @@ func TestCreateTaskServerBusy(t *testing.T) {
 	ts, _ := setupTestServerLimits(1, 1)
 	defer ts.Close()
 
-	// create first task
 	resp, err := http.Post(ts.URL+"/tasks", "application/json", nil)
 	if err != nil {
 		t.Fatalf("create task: %v", err)
@@ -194,7 +186,6 @@ func TestCreateTaskServerBusy(t *testing.T) {
 	resp.Body.Close()
 	id := out["task_id"]
 
-	// add link to start processing
 	body, _ := json.Marshal(map[string]string{"task_id": id, "url": fileSrv.URL + "/f.txt"})
 	resp, err = http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -202,7 +193,6 @@ func TestCreateTaskServerBusy(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// attempt to create second task while first is in process
 	resp, err = http.Post(ts.URL+"/tasks", "application/json", nil)
 	if err != nil {
 		t.Fatalf("create second task: %v", err)
@@ -222,7 +212,6 @@ func TestListDeleteAndForceZip(t *testing.T) {
 	ts, _ := setupTestServer()
 	defer ts.Close()
 
-	// create two tasks
 	resp, _ := http.Post(ts.URL+"/tasks", "application/json", nil)
 	var out1 map[string]string
 	json.NewDecoder(resp.Body).Decode(&out1)
@@ -234,7 +223,6 @@ func TestListDeleteAndForceZip(t *testing.T) {
 	if out1["task_id"] == out2["task_id"] {
 		t.Fatal("duplicate task ids")
 	}
-	// list tasks
 	listResp, err := http.Get(ts.URL + "/tasks/list")
 	if err != nil {
 		t.Fatalf("list: %v", err)
@@ -248,11 +236,9 @@ func TestListDeleteAndForceZip(t *testing.T) {
 		t.Fatalf("expected 2 tasks, got %d", len(list))
 	}
 
-	// add link to first task
 	body, _ := json.Marshal(map[string]string{"task_id": out1["task_id"], "url": fileSrv.URL + "/f.txt"})
 	http.Post(ts.URL+"/tasks/links", "application/json", bytes.NewReader(body))
 
-	// force zip first task
 	body, _ = json.Marshal(map[string]string{"task_id": out1["task_id"]})
 	resp, err = http.Post(ts.URL+"/tasks/zip", "application/json", bytes.NewReader(body))
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -271,7 +257,6 @@ func TestListDeleteAndForceZip(t *testing.T) {
 		time.Sleep(25 * time.Millisecond)
 	}
 
-	// delete second task
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/tasks/delete/"+out2["task_id"], nil)
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -279,7 +264,6 @@ func TestListDeleteAndForceZip(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// list again
 	listResp, _ = http.Get(ts.URL + "/tasks/list")
 	list = []map[string]interface{}{}
 	json.NewDecoder(listResp.Body).Decode(&list)
